@@ -105,15 +105,17 @@ def get_autocomplete_data_sports():
     dups_removed['imgurl'] = dups_removed['imgurl'].apply(lambda x: x[1:-1])
     return dups_removed.to_json(orient='records')
 
-#API endpoint to get top 10 popular products
 @sports.route('/getpopular', methods=['GET'])
-def getpopular():
-    ratings_sum = pd.DataFrame(product_ratings.groupby(['prod_ID'])['rating'].sum()).rename(columns={'rating': 'ratings_sum'})
+def getpopular_sports():
+    ratings_sum = pd.DataFrame(product_ratings_sports.groupby(['prod_ID'])['rating'].sum()).rename(columns={'rating': 'ratings_sum'})
     top10 = ratings_sum.sort_values('ratings_sum', ascending=False).head(10)
 
-    top10_popular = top10.merge(product_ratings, left_index=True, right_on='prod_ID').drop_duplicates(
+    top10_popular = top10.merge(product_ratings_sports, left_index=True, right_on='prod_ID').drop_duplicates(
         ['prod_ID', 'prod_name'])[['prod_ID', 'prod_name', 'ratings_sum']]
-    top10_popular['imgurl'] = top10_popular['prod_ID'].apply(prod_img)
+    top10_popular['imgurl'] = top10_popular['prod_ID'].apply(prod_img_sports)
+    top10_popular['imgurl'] = top10_popular['imgurl'].apply(lambda x: x.strip('][').split(',')[0])
+    top10_popular['imgurl'] = top10_popular['imgurl'].apply(lambda x: x[1:-1])
+
     return top10_popular.to_json(orient='records')
 
 

@@ -115,7 +115,7 @@ def getpopular_cellphone():
 
     top10_popular = top10.merge(product_ratings_cellphone, left_index=True, right_on='prod_ID').drop_duplicates(
         ['prod_ID', 'prod_name'])[['prod_ID', 'prod_name', 'ratings_sum']]
-    top10_popular['imgurl'] = top10_popular['prod_ID'].apply(prod_img_sports)
+    top10_popular['imgurl'] = top10_popular['prod_ID'].apply(prod_img_cellphone)
     top10_popular['imgurl'] = top10_popular['imgurl'].apply(lambda x: x.strip('][').split(',')[0])
     top10_popular['imgurl'] = top10_popular['imgurl'].apply(lambda x: x[1:-1])
 
