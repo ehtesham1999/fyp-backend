@@ -16,7 +16,6 @@ _mailinglist
 .idea/
 docs/_build/
 .vscode
-/static/
 venv/
 /venv/
 # Coverage reports
