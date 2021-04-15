@@ -149,7 +149,7 @@ def recommend_it(predictions_df, itm_df, original_ratings_df, num_recommendation
     # Get the user's data and merge in the item information.
     user_data = original_ratings_df[original_ratings_df.userID == ruserId]
     prev_ratings = pd.DataFrame(user_data).reset_index()
-    # print(prev_ratings.head())
+    #print(prev_ratings.head())
     user_full = (user_data.merge(itm_df, how='left', left_on='prod_ID', right_on='prod_ID').
                  sort_values(['rating'], ascending=False)
                  )
@@ -166,8 +166,7 @@ def recommend_it(predictions_df, itm_df, original_ratings_df, num_recommendation
                            sort_values('Predictions', ascending=False).
                            iloc[:num_recommendations, :-1]
                            )
-    topk = \
-    recommendations.merge(original_ratings_df, left_index=True, right_on='prod_ID', left_on='prod_ID').drop_duplicates(
+    topk = recommendations.merge(original_ratings_df, right_on='prod_ID', left_on='prod_ID').drop_duplicates(
         ['prod_ID', 'prod_name'])[['prod_ID', 'prod_name']]
 
     return [prev_ratings, topk]
@@ -187,6 +186,7 @@ def get_svd_recommendations():
 
     df1 = df[df['userID'].isin(counts1[counts1 >= 10].index)]
     df1 = df1[df1['prod_ID'].isin(counts[counts >= 10].index)]
+
 
     df1 = df1.sort_values(by='rating')
     df1 = df1.reset_index(drop=True)
@@ -217,6 +217,8 @@ def get_svd_recommendations():
     preds_df['userID'] = users_df
     preds_df.set_index('userID', inplace=True)
     preds_df.head()
+
+
 
     # 'A11KZ906QD08C5'
     final_results = recommend_it(preds_df, items_df, df1, 5, user_id)
