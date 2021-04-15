@@ -3,8 +3,9 @@ import pandas as pd
 from flask import request
 from scipy.sparse.linalg import svds
 import numpy as np
-
+from flask_cors import CORS
 app = Flask(__name__)
+CORS(app)
 nb_closest_images = 5
 
 
