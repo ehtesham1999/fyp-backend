@@ -8,6 +8,9 @@ app = Flask(__name__)
 nb_closest_images = 5
 
 
+@app.route('/', methods=['GET'])
+def get_img_search_data():
+    return "<h1>Welcome</h1>"
 
 def load_recommendations():
     # correlation matrix of item similarirt by ratings
