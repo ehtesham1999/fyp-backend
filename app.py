@@ -9,7 +9,7 @@ nb_closest_images = 5
 
 
 @app.route('/', methods=['GET'])
-def get_img_search_data():
+def hello():
     return "<h1>Welcome</h1>"
 
 
