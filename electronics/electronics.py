@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 from flask import Blueprint
 from flask import request

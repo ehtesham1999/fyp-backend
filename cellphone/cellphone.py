@@ -1,6 +1,10 @@
-from flask import Blueprint
 import pandas as pd
+from flask import Blueprint
 from flask import request
+from collections import defaultdict
+from surprise import Dataset
+from surprise import Reader
+from surprise import SVD
 
 
 nb_closest_images = 5
@@ -120,29 +124,84 @@ def getpopular_cellphone():
 
     return top10_popular.to_json(orient='records')
 
+def get_all_predictions(predictions):
+    # First map the predictions to each user.
+    top_n = defaultdict(list)
+    for uid, iid, true_r, est, _ in predictions:
+        top_n[uid].append((iid, est))
+
+    # Then sort the predictions for each user
+    for uid, user_ratings in top_n.items():
+        user_ratings.sort(key=lambda x: x[1], reverse=True)
+
+    return top_n
 
 @cellphone.route('/getrecommendations', methods=['POST'])
 def get_recommendations_cellphone():
     content = request.get_json()
-    all_products = content["all_products"]
-    similar_products = pd.DataFrame()
+    items = content["all_products"]
+    user_id = "A5JLAU2ARJ0XX"
 
-    for product in all_products:
-        print(product["prodId"], product["rating"])
-        similar_items = similar_products.append(get_similar_products_cellphone(product["prodId"], product["rating"]), ignore_index=True)
+    df = product_ratings_cellphone
+    df = df.dropna()
+    newitems = []
+
+    for product in items:
+        newitems.append((user_id, product['prodId'], product['rating'], "", ""))
+
+    df1 = pd.DataFrame(newitems, columns=['userID', 'prod_ID', 'rating', 'imgurl', 'prod_name'])
+
+    df = df.append(df1, ignore_index=True, sort=False)
+
+    counts1 = df['userID'].value_counts()
+    counts = df['prod_ID'].value_counts()
+
+    df1 = df[df['userID'].isin(counts1[counts1 >= 0].index)]
+    df1 = df1[df1['prod_ID'].isin(counts[counts >= 0].index)]
+
+    df1 = df1.sort_values(by='rating')
+    df1 = df1.reset_index(drop=True)
+
+    reader = Reader(rating_scale=(1, 5))
+    data = Dataset.load_from_df(df1[['userID', 'prod_ID', 'rating']], reader)
+    params = {'n_factors': 35, 'n_epochs': 25, 'lr_all': 0.008, 'reg_all': 0.08}
+
+    # data = Dataset.load_builtin('ml-100k')
+    trainset = data.build_full_trainset()  # Build on entire data set
+    algo = SVD(n_factors=params['n_factors'], n_epochs=params['n_epochs'], lr_all=params['lr_all'],
+               reg_all=params['reg_all'])
+    algo.fit(trainset)
+
+    # Predict ratings for all pairs (u, i) that are NOT in the training set.
+    testset = trainset.build_anti_testset()
+
+    # Predicting the ratings for testset
+    predictions = algo.test(testset)
+
+    all_pred = get_all_predictions(predictions)
+    # To get top 5 reommendation
+    n = 5
+
+    for uid, user_ratings in all_pred.items():
+        user_ratings.sort(key=lambda x: x[1], reverse=True)
+        all_pred[uid] = user_ratings[:n]
+
+    tmp = pd.DataFrame.from_dict(all_pred)
+    tmp_transpose = tmp.transpose()
+    results = tmp_transpose.loc[user_id]
+
+    recommended_list = []
+    for prod_id, rating in results:
+        recommended_list.append((prod_id, rating))
 
 
-    #all_recommend = similar_items.sum().sort_values(ascending=False)
-
-    final_results = pd.DataFrame(similar_items.sum().sort_values(ascending=False).head(20))
-    final_results.reset_index(inplace=True)
-    final_results.columns = ['prodid', 'rating']
+    final_results = pd.DataFrame(recommended_list, columns=['prodid', 'rating'])
+    #final_results.reset_index(inplace=True)
     final_results['prodname'] = final_results['prodid'].apply(prod_name_cellphone)
     final_results['imgurl'] = final_results['prodid'].apply(prod_img_cellphone)
     final_results['imgurl'] = final_results['imgurl'].apply(lambda x: x.strip('][').split(', ')[0])
     final_results['imgurl'] = final_results['imgurl'].apply(lambda x: x[1:-1])
 
-
-
     return final_results.to_json(orient='records')
+
 
