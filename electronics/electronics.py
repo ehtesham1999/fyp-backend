@@ -164,7 +164,7 @@ def get_predictions():
     newitems = []
 
     for product in items:
-        newitems.append((user_id, product['prod_ID'], product['rating'], "", ""))
+        newitems.append((user_id, product['prodid'], product['rating'], "", ""))
 
     df1 = pd.DataFrame(newitems, columns=['userID', 'prod_ID', 'rating', 'imgurl', 'prod_name'])
 
