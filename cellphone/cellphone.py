@@ -1,8 +1,7 @@
 from flask import Blueprint
 import pandas as pd
 from flask import request
-from scipy.sparse.linalg import svds
-import numpy as np
+
 
 nb_closest_images = 5
 

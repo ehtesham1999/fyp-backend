@@ -1,9 +1,11 @@
-from flask import Blueprint
-import pandas as pd
-from flask import request
-from scipy.sparse.linalg import svds
 import numpy as np
-
+import pandas as pd
+from flask import Blueprint
+from flask import request
+from collections import defaultdict
+from surprise import Dataset
+from surprise import Reader
+from surprise import SVD
 nb_closest_images = 5
 
 electronics = Blueprint('electronics', __name__ , static_folder='static')
@@ -112,112 +114,105 @@ def getpopular():
     top10_popular['imgurl'] = top10_popular['prod_ID'].apply(prod_img)
     return top10_popular.to_json(orient='records')
 
+#API endpoint gets recommendations using KNN algorithm
+# @electronics.route('/getrecommendations', methods=['POST'])
+# def get_recommendations():
+#     content = request.get_json()
+#     all_products = content["all_products"]
+#     similar_products = pd.DataFrame()
+#
+#     for product in all_products:
+#         print(product["prodId"], product["rating"])
+#         similar_items = similar_products.append(get_similar_products(product["prodId"], product["rating"]),
+#                                                 ignore_index=True)
+#
+#     # all_recommend = similar_items.sum().sort_values(ascending=False)
+#
+#     final_results = pd.DataFrame(similar_items.sum().sort_values(ascending=False).head(20))
+#     final_results.reset_index(inplace=True)
+#     final_results.columns = ['prodid', 'rating']
+#     final_results['prodname'] = final_results['prodid'].apply(prod_name)
+#     final_results['imgurl'] = final_results['prodid'].apply(prod_img)
+#
+#     return final_results.to_json(orient='records')
 
+#function to get recommendations using SVD algorithm
+def get_all_predictions(predictions):
+    # First map the predictions to each user.
+    top_n = defaultdict(list)
+    for uid, iid, true_r, est, _ in predictions:
+        top_n[uid].append((iid, est))
+
+    # Then sort the predictions for each user
+    for uid, user_ratings in top_n.items():
+        user_ratings.sort(key=lambda x: x[1], reverse=True)
+
+    return top_n
+
+
+#API end point gets recommendations using SVD algorithm
+#i have set a default userID for getting recommendations
 @electronics.route('/getrecommendations', methods=['POST'])
-def get_recommendations():
-    content = request.get_json()
-    all_products = content["all_products"]
-    similar_products = pd.DataFrame()
-
-    for product in all_products:
-        print(product["prodId"], product["rating"])
-        similar_items = similar_products.append(get_similar_products(product["prodId"], product["rating"]),
-                                                ignore_index=True)
-
-    # all_recommend = similar_items.sum().sort_values(ascending=False)
-
-    final_results = pd.DataFrame(similar_items.sum().sort_values(ascending=False).head(20))
-    final_results.reset_index(inplace=True)
-    final_results.columns = ['prodid', 'rating']
-    final_results['prodname'] = final_results['prodid'].apply(prod_name)
-    final_results['imgurl'] = final_results['prodid'].apply(prod_img)
-
-    return final_results.to_json(orient='records')
-
-
-def recommend_it(predictions_df, itm_df, original_ratings_df, num_recommendations=10, ruserId='A108EEYSHGDL6O'):
-    # Get and sort the user's predictions
-
-    sorted_user_predictions = predictions_df.loc[ruserId].sort_values(ascending=False)
-
-    # Get the user's data and merge in the item information.
-    user_data = original_ratings_df[original_ratings_df.userID == ruserId]
-    prev_ratings = pd.DataFrame(user_data).reset_index()
-    #print(prev_ratings.head())
-    user_full = (user_data.merge(itm_df, how='left', left_on='prod_ID', right_on='prod_ID').
-                 sort_values(['rating'], ascending=False)
-                 )
-
-    print('User {0} has already purchased {1} items.'.format(ruserId, user_full.shape[0]))
-    print('Recommending the highest {0} predicted  items not already purchased.'.format(num_recommendations))
-
-    # Recommend the highest predicted rating items that the user hasn't bought yet.
-    recommendations = (itm_df[~itm_df['prod_ID'].isin(user_full['prod_ID'])].
-                           merge(pd.DataFrame(sorted_user_predictions).reset_index(), how='left',
-                                 left_on='prod_ID',
-                                 right_on='prod_ID').
-                           rename(columns={ruserId: 'Predictions'}).
-                           sort_values('Predictions', ascending=False).
-                           iloc[:num_recommendations, :-1]
-                           )
-    topk = recommendations.merge(original_ratings_df, right_on='prod_ID', left_on='prod_ID').drop_duplicates(
-        ['prod_ID', 'prod_name'])[['prod_ID', 'prod_name']]
-
-    return [prev_ratings, topk]
-
-
-@electronics.route('/getrecommendations_svd', methods=['POST'])
-def get_svd_recommendations():
+def get_predictions():
     content = request.get_json()
     items = content["all_products"]
-    user_id = content["user_id"]
-
+    #user_id = content["user_id"]
+    user_id = "A5JLAU2ARJ0XX"
+    # product_ratings=pd.read_csv('./prod_ratings.csv')
     df = product_ratings
     df = df.dropna()
+    newitems = []
+
+    for product in items:
+        newitems.append((user_id, product['prod_ID'], product['rating'], "", ""))
+
+    df1 = pd.DataFrame(newitems, columns=['userID', 'prod_ID', 'rating', 'imgurl', 'prod_name'])
+
+    df = df.append(df1, ignore_index=True, sort=False)
 
     counts1 = df['userID'].value_counts()
     counts = df['prod_ID'].value_counts()
 
-    df1 = df[df['userID'].isin(counts1[counts1 >= 10].index)]
-    df1 = df1[df1['prod_ID'].isin(counts[counts >= 10].index)]
-
+    df1 = df[df['userID'].isin(counts1[counts1 >= 0].index)]
+    df1 = df1[df1['prod_ID'].isin(counts[counts >= 0].index)]
 
     df1 = df1.sort_values(by='rating')
     df1 = df1.reset_index(drop=True)
-    count_users = df1.groupby("userID", as_index=False).count()
 
-    count = df1.groupby("prod_ID", as_index=False).mean()
+    reader = Reader(rating_scale=(1, 5))
+    data = Dataset.load_from_df(df1[['userID', 'prod_ID', 'rating']], reader)
+    params = {'n_factors': 35, 'n_epochs': 25, 'lr_all': 0.008, 'reg_all': 0.08}
 
-    items_df = count[['prod_ID']]
-    users_df = count_users[['userID']]
+    # data = Dataset.load_builtin('ml-100k')
+    trainset = data.build_full_trainset()  # Build on entire data set
+    algo = SVD(n_factors=params['n_factors'], n_epochs=params['n_epochs'], lr_all=params['lr_all'],
+               reg_all=params['reg_all'])
+    algo.fit(trainset)
 
-    df_clean_matrix = df1.pivot(index='prod_ID', columns='userID', values='rating').fillna(0)
-    df_clean_matrix = df_clean_matrix.T
-    df_clean_matrix.loc[user_id][:] = 0
+    # Predict ratings for all pairs (u, i) that are NOT in the training set.
+    testset = trainset.build_anti_testset()
 
-    for product in items:
-        df_clean_matrix.loc[user_id][product["prodId"]] = product["rating"]
+    # Predicting the ratings for testset
+    predictions = algo.test(testset)
 
-    R = (df_clean_matrix).to_numpy()
+    all_pred = get_all_predictions(predictions)
+    # To get top 4 reommendation
+    n = 5
 
-    user_ratings_mean = np.mean(R, axis=1)
-    R_demeaned = R - user_ratings_mean.reshape(-1, 1)
+    for uid, user_ratings in all_pred.items():
+        user_ratings.sort(key=lambda x: x[1], reverse=True)
+        all_pred[uid] = user_ratings[:n]
 
-    U, sigma, Vt = svds(R_demeaned)
-    sigma = np.diag(sigma)
+    tmp = pd.DataFrame.from_dict(all_pred)
+    tmp_transpose = tmp.transpose()
+    results = tmp_transpose.loc[user_id]
 
-    all_user_predicted_ratings = np.dot(np.dot(U, sigma), Vt) + user_ratings_mean.reshape(-1, 1)
-    preds_df = pd.DataFrame(all_user_predicted_ratings, columns=df_clean_matrix.columns)
-    preds_df['userID'] = users_df
-    preds_df.set_index('userID', inplace=True)
-    preds_df.head()
+    recommended_list = []
+    for prod_id, rating in results:
+        recommended_list.append((prod_id, rating))
 
+    recommendations_df = pd.DataFrame(recommended_list, columns=['prodid', 'rating'])
+    recommendations_df['prodname'] = recommendations_df['prodid'].apply(prod_name)
+    recommendations_df['imgurl'] = recommendations_df['prodid'].apply(prod_img)
+    return recommendations_df.to_json(orient='records')
 
-
-    # 'A11KZ906QD08C5'
-    final_results = recommend_it(preds_df, items_df, df1, 5, user_id)
-    final_results = final_results[1]
-    final_results.reset_index(inplace=True)
-    final_results['imgurl'] = final_results['prod_ID'].apply(prod_img)
-    final_results['rating'] = final_results['prod_ID'].apply(lambda prodid: preds_df.loc[user_id][prodid])
-    return final_results.to_json(orient='records')
