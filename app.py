@@ -2,11 +2,14 @@ from flask import Flask
 from electronics.electronics import electronics
 from sports.sports import sports
 from cellphone.cellphone import cellphone
+from movies.movies import movies
+
 from flask_cors import CORS
 app = Flask(__name__)
 app.register_blueprint(electronics,url_prefix="/electronics")
 app.register_blueprint(sports,url_prefix="/sports")
 app.register_blueprint(cellphone,url_prefix="/cellphone")
+app.register_blueprint(movies,url_prefix="/movies")
 
 CORS(app)
 nb_closest_images = 5
