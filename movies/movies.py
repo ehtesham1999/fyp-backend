@@ -38,12 +38,39 @@ df_movies = pd.merge(movie_ratings_df,movie_names_df).drop(['timestamp','genres'
 df_movies = pd.merge(df_movies,movie_urls_df)
 df_movies.head()
 
+product_ratings_movies = df_movies
+
 def movie_name(movieid):
     return df_movies.loc[df_movies['movieId'] == movieid].iloc[0]['title']
 
 
 def movie_img(movieid):
     return df_movies.loc[df_movies['movieId'] == movieid].iloc[0]['url']
+
+
+#API endpoint to return the data needed for autocomplete / It is all the product data above threshold
+@movies.route('/getdata', methods=['GET'])
+def get_autocomplete_data_sports():
+    dups_removed = product_ratings_movies.sort_values("title")
+
+    # dropping ALL duplicte values
+    dups_removed.drop_duplicates(subset="title",
+                         keep=False, inplace=True)
+
+    return dups_removed.to_json(orient='records')
+
+
+@movies.route('/getpopular', methods=['GET'])
+def getpopular():
+    ratings_sum = pd.DataFrame(product_ratings_movies.groupby(['movieId'])['rating'].sum()).rename(
+        columns={'rating': 'ratings_sum'})
+    top10 = ratings_sum.sort_values('ratings_sum', ascending=False).head(10)
+
+    top10_popular = top10.merge(product_ratings_movies, left_index=True, right_on='movieId').drop_duplicates(
+        ['movieId', 'title'])[['movieId', 'title', 'ratings_sum']]
+    top10_popular['imgurl'] = top10_popular['movieId'].apply(movie_img)
+    return top10_popular.to_json(orient='records')
+
 
 
 def get_all_predictions(predictions):
