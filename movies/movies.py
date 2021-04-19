@@ -10,49 +10,55 @@ from surprise import SVD
 movies = Blueprint('movies', __name__ , static_folder='static')
 
 
-def load_movie_ratings():
+# def load_movie_ratings():
+#     # dataframe contains all product details above thereshold of 200 (all products with atleast 200 ratings)
+#     movie_ratings = pd.read_csv("movies/static/ratings.csv")
+#     return movie_ratings
+#
+# def load_movie_names():
+#     # dataframe contains all product details above thereshold of 200 (all products with atleast 200 ratings)
+#     movie_names = pd.read_csv("movies/static/movies.csv")
+#     return movie_names
+#
+# def load_movie_urls():
+#     # dataframe contains all product details above thereshold of 200 (all products with atleast 200 ratings)
+#     movie_urls = pd.read_csv("movies/static/url.csv",names=['movieId', 'url'])
+#     return movie_urls
+
+def load_movies_df():
     # dataframe contains all product details above thereshold of 200 (all products with atleast 200 ratings)
-    movie_ratings = pd.read_csv("movies/static/ratings.csv")
-    return movie_ratings
-
-def load_movie_names():
-    # dataframe contains all product details above thereshold of 200 (all products with atleast 200 ratings)
-    movie_names = pd.read_csv("movies/static/movies.csv")
-    return movie_names
-
-def load_movie_urls():
-    # dataframe contains all product details above thereshold of 200 (all products with atleast 200 ratings)
-    movie_urls = pd.read_csv("movies/static/url.csv",names=['movieId', 'url'])
-    return movie_urls
+    movies_df = pd.read_csv("movies/static/df_movies.csv")
+    return movies_df
 
 
-movie_ratings_df = load_movie_ratings()
-movie_names_df = load_movie_names()
-movie_urls_df = load_movie_urls()
+# movie_ratings_df = load_movie_ratings()
+# movie_names_df = load_movie_names()
+# movie_urls_df = load_movie_urls()
 
-
+df_movies = load_movies_df()
 # df_movies = movie_ratings_df.merge(movie_names_df,how='inner',on='movieId').drop(['timestamp','genres'],axis=1)
 # df_movies = df_movies.merge(movie_urls_df,how='inner', on='movieId')
 
-df_movies = pd.merge(movie_ratings_df,movie_names_df).drop(['timestamp','genres'],axis=1)
-df_movies = pd.merge(df_movies,movie_urls_df)
-df_movies.head()
+# df_movies = pd.merge(movie_ratings_df,movie_names_df).drop(['timestamp','genres'],axis=1)
+# df_movies = pd.merge(df_movies,movie_urls_df)
+# df_movies.head()
 
 product_ratings_movies = df_movies
 
-def movie_name(movieid):
-    return df_movies.loc[df_movies['movieId'] == movieid].iloc[0]['title']
+def movie_name(prodid):
+    return df_movies.loc[df_movies['movieId'] == prodid].iloc[0]['title']
 
 
-def movie_img(movieid):
-    return df_movies.loc[df_movies['movieId'] == movieid].iloc[0]['url']
+def movie_img(prodid):
+    return df_movies.loc[df_movies['movieId'] == prodid].iloc[0]['poster_url']
 
 
 #API endpoint to return the data needed for autocomplete / It is all the product data above threshold
 @movies.route('/getdata', methods=['GET'])
 def get_autocomplete_data_sports():
     dups_removed = product_ratings_movies.sort_values("title")
-
+    dups_removed.drop('url',inplace=True,axis=1)
+    dups_removed.rename(columns={"poster_url": "url"},inplace=True)
     # dropping ALL duplicte values
     dups_removed.drop_duplicates(subset="title",
                          keep=False, inplace=True)
@@ -68,7 +74,7 @@ def getpopular():
 
     top10_popular = top10.merge(product_ratings_movies, left_index=True, right_on='movieId').drop_duplicates(
         ['movieId', 'title'])[['movieId', 'title', 'ratings_sum']]
-    top10_popular['imgurl'] = top10_popular['movieId'].apply(movie_img)
+    top10_popular['url'] = top10_popular['movieId'].apply(movie_img)
     return top10_popular.to_json(orient='records')
 
 
@@ -98,9 +104,9 @@ def get_predictions():
     df = df.dropna()
     newitems = []
     for product in items:
-        newitems.append((user_id, product['prodId'], product['rating'], "", ""))
+        newitems.append((user_id, product['prodId'], product['rating'], "", "",""))
 
-    df1 = pd.DataFrame(newitems, columns=['userId', 'movieId', 'rating', 'title', 'url'])
+    df1 = pd.DataFrame(newitems, columns=['userId', 'movieId', 'rating', 'title', 'url','poster_url'])
 
     df = df.append(df1, ignore_index=True, sort=False)
 
